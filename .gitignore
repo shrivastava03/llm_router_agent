@@ -1,0 +1,19 @@
+# Environments
+.env.example
+.venv
+venv/
+aiagent/
+env/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Agent databases and memory
+.chromadb/
+budget_audit.db
+
+# OS generated files
+.DS_Store

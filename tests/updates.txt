@@ -1,0 +1,8 @@
+Key Changes Made:
+Shared Cache Memory URI: I updated db_path to "file::memory:?cache=shared". Standard :memory: databases in SQLite are unique to each connection. By using a shared cache, the tables created during await g.setup() remain accessible when your test methods execute their queries.
+
+Async Fixture: The guard fixture is now an async def and calls await g.setup(). This attaches the initialization to the correct pytest event loop.
+
+Async Test Functions: I added the @pytest.mark.asyncio decorator to every test function.
+
+Native Awaits: The custom run() wrapper is gone, replaced by Python's native await.
