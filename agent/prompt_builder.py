@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 @dataclass
@@ -16,7 +16,7 @@ class ToolDescriptor:
 TOOL_REGISTRY: list[ToolDescriptor] = [
     ToolDescriptor(
         name="web_search",
-        description="Search the web for current information via DuckDuckGo.",
+        description="Search the web for current information via DuckDuckGo/Tavily.",
         input_hint="a plain search query string",
     ),
     ToolDescriptor(
@@ -75,7 +75,12 @@ Example 2 (Finishing the task):
   "tool_input": "The answer is 391."
 }
 
-CRITICAL: Output ONLY valid JSON. No conversational text before or after the JSON.
+CRITICAL RULES:
+1. Output ONLY valid JSON. No conversational text before or after the JSON.
+2. If you know the answer or have completed the task, use the 'finish' tool IMMEDIATELY. Do not over-research.
+3. NEVER write anything else before the JSON or after the JSON.
+4. If a tool returns no results or fails twice in a row, DO NOT keep trying. Use the 'finish' tool to inform the user that the information cannot be found.
+5. If you receive a '💡 DIRECT ANSWER FROM SEARCH ENGINE', evaluate if it answers the user's prompt. If it does, use the 'finish' tool on your very next turn.
 """
 
     def __init__(self):
