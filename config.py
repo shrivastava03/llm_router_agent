@@ -29,13 +29,13 @@ GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 @dataclass
 class ModelConfig:
     model_id:       str
-    max_new_tokens: int   = 1024
-    temperature:    float = 0.7
+    max_new_tokens: int   = 2048
+    temperature:    float = 0.6
     timeout_secs:   float = 30.0
 
 SIMPLE_MODEL = ModelConfig(
     model_id       = "llama-3.1-8b-instant", 
-    max_new_tokens = 1024,
+    max_new_tokens = 2048,
     temperature    = 0.5,
 )
 
@@ -62,9 +62,8 @@ class ClassifierSettings:
     
 CLASSIFIER = ClassifierSettings()
 
-# ─────────────────────────────────────────────────────────────────
 # Budget + Loop Settings
-# ─────────────────────────────────────────────────────────────────
+
 
 @dataclass
 class BudgetSettings:
@@ -77,9 +76,8 @@ class BudgetSettings:
 
 BUDGET = BudgetSettings()
 
-# ─────────────────────────────────────────────────────────────────
+
 # Connector Settings
-# ─────────────────────────────────────────────────────────────────
 
 @dataclass
 class ConnectorSettings:
