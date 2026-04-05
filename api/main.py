@@ -11,6 +11,7 @@ Run:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import time
 import uuid
@@ -21,8 +22,9 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
+from fastapi.middleware.cors import CORSMiddleware
 
 import config
 from core.classifier   import ComplexityClassifier
@@ -92,7 +94,7 @@ class AppState:
     guard:      BudgetGuard
     connector:  HFConnector
     memory:     AgentMemory
-    agent:      Agent              # NEW
+    agent:      Agent             
     started_at: float
 
 
@@ -158,6 +160,13 @@ app = FastAPI(
     lifespan    = lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Allows any frontend to connect
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ─────────────────────────────────────────────────────────────────
 # Middleware
@@ -175,6 +184,22 @@ async def log_requests(request: Request, call_next):
 # ─────────────────────────────────────────────────────────────────
 # Routes
 # ─────────────────────────────────────────────────────────────────
+
+@app.get("/")
+async def serve_frontend():
+    """Serves the UI directly from the backend"""
+    # Look for index.html in the parent directory of api/
+    ui_path = Path(__file__).resolve().parent.parent / "index.html"
+    
+    if not ui_path.exists():
+        return HTMLResponse(
+            content="<h1>Frontend not found!</h1><p>Please place index.html in the root directory.</p>", 
+            status_code=404
+        )
+        
+    with open(ui_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read(), status_code=200)
+
 
 @app.post("/complete", response_model=CompletionResponse)
 async def complete(req: CompletionRequest):
