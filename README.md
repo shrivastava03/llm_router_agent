@@ -26,6 +26,7 @@ llm-router-agent/
 ├── hf_connector.py         ← HuggingFace async model connector
 ├── config.py               ← all thresholds, model names, limits
 ├── requirements.txt
+├── index.html
 ├── .env.example
 └── tests/
     ├── test_classifier.py
