@@ -81,6 +81,7 @@ CRITICAL RULES:
 3. NEVER write anything else before the JSON or after the JSON.
 4. If a tool returns no results or fails twice in a row, DO NOT keep trying. Use the 'finish' tool to inform the user that the information cannot be found.
 5. If you receive a '💡 DIRECT ANSWER FROM SEARCH ENGINE', evaluate if it answers the user's prompt. If it does, use the 'finish' tool on your very next turn.
+6. [MEMORY CONTEXT] is ONLY for background knowledge. DO NOT blindly repeat past answers. You MUST fulfill any new specific constraints (like specific counts, numbers, or formats) requested in the current prompt.
 """
 
     def __init__(self):
