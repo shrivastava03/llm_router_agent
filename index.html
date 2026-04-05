@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Router Agent</title>
+    <!-- Tailwind CSS for lightweight, beautiful styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: { extend: { colors: { gray: { 900: '#111827', 800: '#1F2937', 700: '#374151' } } } }
+        }
+    </script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom scrollbar for a sleek look */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+        .typing-indicator span { animation: blink 1.4s infinite both; height: 6px; width: 6px; background: #9CA3AF; border-radius: 50%; display: inline-block; margin: 0 1px; }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 h-screen flex font-sans overflow-hidden">
+
+    <!-- Left Main Panel: Chat Interface -->
+    <div class="flex-1 flex flex-col h-full border-r border-gray-700 relative">
+        <!-- Header -->
+        <header class="bg-gray-800 p-4 border-b border-gray-700 flex justify-between items-center shadow-md">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 p-2 rounded-lg"><i class="fa-solid fa-brain text-white"></i></div>
+                <h1 class="text-xl font-bold text-gray-100">LLM Router Agent</h1>
+            </div>
+            <span class="text-xs font-semibold bg-green-900 text-green-400 px-3 py-1 rounded-full border border-green-700">
+                <i class="fa-solid fa-circle text-[8px] mr-1"></i> API Online
+            </span>
+        </header>
+
+        <!-- Chat History Area -->
+        <main id="chat-container" class="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth pb-32">
+            <!-- Greeting Message -->
+            <div class="flex gap-4 items-start">
+                <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-900/50">
+                    <i class="fa-solid fa-robot text-sm"></i>
+                </div>
+                <div class="bg-gray-800 rounded-2xl rounded-tl-none px-5 py-3.5 max-w-[80%] border border-gray-700 shadow-sm text-gray-200">
+                    Hello! I am your autonomous LLM Router. Ask me a simple question, or give me a complex task requiring web search or logic.
+                </div>
+            </div>
+        </main>
+
+        <!-- Input Area (Fixed at bottom) -->
+        <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-gray-900 via-gray-900 to-transparent p-6 pt-12">
+            <form id="chat-form" class="relative max-w-4xl mx-auto flex items-end gap-2">
+                <textarea id="prompt-input" rows="1" placeholder="Type your prompt here..." class="w-full bg-gray-800 text-gray-100 border border-gray-600 rounded-xl pl-4 pr-12 py-4 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none overflow-hidden shadow-lg transition-all"></textarea>
+                <button type="submit" id="send-btn" class="absolute right-3 bottom-3 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors flex justify-center items-center h-10 w-10 shadow-md">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </form>
+            <p class="text-center text-xs text-gray-500 mt-2">AI can make mistakes. Verify important information.</p>
+        </div>
+    </div>
+
+    <!-- Right Sidebar: Agent Telemetry Dashboard -->
+    <aside class="w-80 bg-gray-900 h-full flex flex-col p-6 overflow-y-auto">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-6 border-b border-gray-700 pb-2">Agent Telemetry</h2>
+        
+        <!-- Metrics Container -->
+        <div id="telemetry-panel" class="space-y-5 opacity-30 transition-opacity duration-500">
+            <!-- Complexity Score -->
+            <div class="bg-gray-800 rounded-xl p-4 border border-gray-700 shadow-sm">
+                <div class="text-xs text-gray-400 mb-1">Complexity Score</div>
+                <div class="flex items-end justify-between">
+                    <div id="metric-score" class="text-2xl font-bold text-blue-400">0.00</div>
+                    <div id="metric-tier" class="text-xs font-medium bg-gray-700 px-2 py-1 rounded text-gray-300">Awaiting...</div>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full bg-gray-700 rounded-full h-1.5 mt-3">
+                    <div id="metric-bar" class="bg-blue-500 h-1.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Budget Stats -->
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-gray-800 rounded-xl p-4 border border-gray-700 shadow-sm">
+                    <i class="fa-solid fa-coins text-yellow-500 mb-2"></i>
+                    <div class="text-xs text-gray-400">Tokens</div>
+                    <div id="metric-tokens" class="text-lg font-semibold text-gray-100">0</div>
+                </div>
+                <div class="bg-gray-800 rounded-xl p-4 border border-gray-700 shadow-sm">
+                    <i class="fa-solid fa-rotate-right text-purple-400 mb-2"></i>
+                    <div class="text-xs text-gray-400">Iterations</div>
+                    <div id="metric-iters" class="text-lg font-semibold text-gray-100">0</div>
+                </div>
+            </div>
+
+            <!-- Agent Trace Log -->
+            <div class="mt-6">
+                <div class="text-xs text-gray-400 mb-3 font-semibold">Latest Execution Trace</div>
+                <div id="agent-steps" class="space-y-3">
+                    <div class="text-xs text-gray-500 italic text-center py-4 bg-gray-800/50 rounded-lg border border-gray-700/50 border-dashed">
+                        Waiting for prompt...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <script>
+        // Wrap everything in DOMContentLoaded to ensure elements are present before assigning listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.getElementById('chat-form');
+            const input = document.getElementById('prompt-input');
+            const container = document.getElementById('chat-container');
+            const sendBtn = document.getElementById('send-btn');
+            
+            if (!form || !input || !container || !sendBtn) {
+                console.error("UI Elements not found! Check your HTML IDs.");
+                return;
+            }
+
+            // 🔥 FIX: Generate ONE session ID for the entire conversation
+            const currentSessionId = 'web-session-' + Date.now();
+            
+            // Auto-resize textarea
+            input.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+                if(this.value === '') this.style.height = 'auto';
+            });
+
+            // Submit on Enter (Shift+Enter for newline)
+            input.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if(this.value.trim()) form.dispatchEvent(new Event('submit'));
+                }
+            });
+
+            function addMessage(text, isUser = false) {
+                const div = document.createElement('div');
+                div.className = 'flex gap-4 items-start ' + (isUser ? 'flex-row-reverse' : '');
+                
+                const icon = isUser 
+                    ? '<div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center shrink-0 border border-gray-600"><i class="fa-solid fa-user text-sm text-gray-300"></i></div>'
+                    : '<div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0 shadow-lg shadow-blue-900/50"><i class="fa-solid fa-robot text-sm text-white"></i></div>';
+                
+                const bubbleClasses = isUser 
+                    ? 'bg-gray-700 rounded-2xl rounded-tr-none px-5 py-3.5 max-w-[80%] text-gray-100 border border-gray-600 shadow-sm'
+                    : 'bg-gray-800 rounded-2xl rounded-tl-none px-5 py-3.5 max-w-[80%] border border-gray-700 shadow-sm text-gray-200 leading-relaxed';
+                
+                const formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+
+                div.innerHTML = `
+                    ${icon}
+                    <div class="${bubbleClasses}">${formattedText}</div>
+                `;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+            }
+
+            function showTyping() {
+                const div = document.createElement('div');
+                div.id = 'typing-indicator';
+                div.className = 'flex gap-4 items-start';
+                div.innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><i class="fa-solid fa-robot text-sm text-white"></i></div>
+                    <div class="bg-gray-800 rounded-2xl rounded-tl-none px-5 py-4 max-w-[80%] border border-gray-700 typing-indicator flex items-center h-[52px]">
+                        <span></span><span></span><span></span>
+                    </div>
+                `;
+                container.appendChild(div);
+                container.scrollTop = container.scrollHeight;
+            }
+
+            function removeTyping() {
+                const indicator = document.getElementById('typing-indicator');
+                if(indicator) indicator.remove();
+            }
+
+            function updateTelemetry(data) {
+                document.getElementById('telemetry-panel').classList.remove('opacity-30');
+                
+                const score = data.complexity_score.toFixed(3);
+                document.getElementById('metric-score').innerText = score;
+                document.getElementById('metric-bar').style.width = `${score * 100}%`;
+                
+                const tierEl = document.getElementById('metric-tier');
+                if(data.tier_used === 'complex') {
+                    tierEl.innerText = 'COMPLEX MODEL';
+                    tierEl.className = 'text-[10px] font-bold bg-purple-900/50 text-purple-400 px-2 py-1 rounded border border-purple-700/50 uppercase tracking-wide';
+                    document.getElementById('metric-score').className = 'text-2xl font-bold text-purple-400';
+                    document.getElementById('metric-bar').className = 'bg-purple-500 h-1.5 rounded-full';
+                } else {
+                    tierEl.innerText = 'SIMPLE MODEL';
+                    tierEl.className = 'text-[10px] font-bold bg-blue-900/50 text-blue-400 px-2 py-1 rounded border border-blue-700/50 uppercase tracking-wide';
+                    document.getElementById('metric-score').className = 'text-2xl font-bold text-blue-400';
+                    document.getElementById('metric-bar').className = 'bg-blue-500 h-1.5 rounded-full';
+                }
+
+                document.getElementById('metric-tokens').innerText = data.total_tokens.toLocaleString();
+                document.getElementById('metric-iters').innerText = data.iterations;
+
+                const stepsContainer = document.getElementById('agent-steps');
+                stepsContainer.innerHTML = '';
+                
+                if(data.killed) {
+                    stepsContainer.innerHTML += `
+                        <div class="bg-red-900/20 border border-red-800/50 rounded-lg p-3 text-red-400 text-xs flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation"></i> KILLED: ${data.kill_reason}
+                        </div>`;
+                }
+
+                data.steps.forEach(step => {
+                    let icon = 'fa-microchip'; 
+                    if(step.tool === 'web_search') icon = 'fa-globe text-blue-400';
+                    if(step.tool === 'finish') icon = 'fa-check text-green-400';
+                    if(step.tool === 'file_reader') icon = 'fa-file-pdf text-red-400';
+                    
+                    stepsContainer.innerHTML += `
+                        <div class="bg-gray-800 rounded-lg p-3 border border-gray-700 shadow-sm relative overflow-hidden group">
+                            <div class="flex items-center gap-2 mb-2">
+                                <i class="fa-solid ${icon} text-xs"></i>
+                                <span class="text-xs font-semibold text-gray-300 font-mono">${step.tool}</span>
+                            </div>
+                            <p class="text-[11px] text-gray-400 line-clamp-2 group-hover:line-clamp-none transition-all">${step.thought}</p>
+                        </div>
+                    `;
+                });
+            }
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const text = input.value.trim();
+                if (!text) return;
+
+                addMessage(text, true);
+                input.value = '';
+                input.style.height = 'auto';
+                sendBtn.disabled = true;
+                sendBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                showTyping();
+
+                try {
+                    const response = await fetch('http://localhost:8000/complete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        // 🔥 FIX: Use the persistent session ID here
+                        body: JSON.stringify({ prompt: text, session_id: currentSessionId })
+                    });
+
+                    const data = await response.json();
+                    removeTyping();
+                    
+                    if(data.answer) {
+                        addMessage(data.answer, false);
+                        updateTelemetry(data);
+                    } else {
+                        addMessage("❌ Error: " + JSON.stringify(data), false);
+                    }
+                } catch (error) {
+                    removeTyping();
+                    addMessage("❌ Backend connection failed. Is your FastAPI server running on port 8000?", false);
+                } finally {
+                    sendBtn.disabled = false;
+                    sendBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
