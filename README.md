@@ -82,6 +82,7 @@ Incoming Request
 ```
 
 ---
+![FastAPI Wiring](fastapi_wiring.svg)
 
 ## API Routes
 
@@ -102,11 +103,12 @@ Liveness check + memory entry count.
 Last 50 sessions with token cost, status, and kill reason.
 
 ---
-
+![Classifier](complexity_classifier.svg)
 ## Configuration
 
 Everything lives in `config.py` — no scattered magic numbers:
 
+![ReAct Loop](react_agent_loop.svg)
 | Setting | Default | What it controls |
 |---|---|---|
 | `SIMPLE_MODEL.model_id` | Mistral-7B-Instruct | Fast model |
@@ -130,7 +132,7 @@ Everything lives in `config.py` — no scattered magic numbers:
 Kill events → `budget_audit.db` with full replay via `GET /spend`.
 
 ---
-
+![Budget Guard](budget_guard_tripwires.svg)
 ## Models (all free)
 
 | Tier | Model | Use case |
