@@ -35,12 +35,11 @@ RUN pip install --no-cache-dir \
     --default-timeout=1000 \
     -r requirements.txt
 
-# Verify critical imports
-RUN python -c "import torch; print(f'PyTorch version: {torch.__version__}')" && \
-    python -c "import sentence_transformers; print(f'Sentence Transformers OK')" && \
-    python -c "import chromadb; print(f'ChromaDB version: {chromadb.__version__}')" && \
-    python -c "import onnxruntime; print(f'ONNX Runtime OK')"
-
+# Verify critical imports one by one so we get exact error tracebacks
+RUN python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+RUN python -c "import sentence_transformers; print(f'Sentence Transformers OK')"
+RUN python -c "import chromadb; print(f'ChromaDB version: {chromadb.__version__}')"
+RUN python -c "import onnxruntime; print(f'ONNX Runtime OK')"
 # ============================================================================
 # Stage 2: Runtime (slim, only what's needed)
 # ============================================================================
