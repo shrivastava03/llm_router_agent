@@ -25,6 +25,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Response
+
 
 import config
 from core.classifier   import ComplexityClassifier
@@ -159,6 +161,10 @@ app = FastAPI(
     version     = "1.0.0",
     lifespan    = lifespan,
 )
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
 
 app.add_middleware(
     CORSMiddleware,
