@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  llm-router:
+    build: .
+    container_name: llm-router-agent
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.example
+    volumes:
+      - ./chroma_data:/app/chroma_data
+      - ./budget_audit.db:/app/budget_audit.db
+    restart: unless-stopped
