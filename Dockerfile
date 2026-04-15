@@ -16,8 +16,8 @@ RUN pip install --upgrade pip
 # 1. Install CPU-only PyTorch FIRST
 RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# 2. Install Vector DB
-RUN pip install chromadb==0.5.0
+# 2. Install Vector DB and ONNX Runtime to prevent Exit Code 1
+RUN pip install chromadb==0.5.0 onnxruntime
 
 # 3. Install Embedding Library
 RUN pip install sentence-transformers>=2.7.0
@@ -29,7 +29,7 @@ RUN pip install --default-timeout=1000 --no-cache-dir -r requirements.txt
 # Pre-download the HuggingFace AI model
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
 
-# Pre-download the ChromaDB ONNX model
+# Pre-download the ChromaDB ONNX model successfully
 RUN python -c "from chromadb.utils import embedding_functions; embedding_functions.DefaultEmbeddingFunction()(['test'])"
 
 # Copy the rest of your application code
