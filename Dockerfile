@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cpu
 
 RUN pip install --no-cache-dir \
+    "numpy<2.0.0" \
     sentence-transformers>=2.7.0 \
     chromadb==0.5.0 \
     onnxruntime
