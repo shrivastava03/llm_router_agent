@@ -3,18 +3,16 @@ api/main.py
 ─────────────────────────────────────────────────────────────────
 FastAPI Entrypoint — LLM Router Agent
 
-Run:
-  cd llm-router-agent
-  uvicorn api.main:app --reload --port 8000
+Production Run Command (Docker/Render):
+  uvicorn api.main:app --host 0.0.0.0 --port $PORT
 """
 
 from __future__ import annotations
 
 import logging
-import os
-import sys
 import time
 import uuid
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
@@ -22,10 +20,9 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi import Response
 
 
 import config
@@ -34,7 +31,7 @@ from core.router       import Router
 from core.budget_guard import BudgetGuard, BudgetExceededError, LoopKillError
 from core.memory       import AgentMemory
 from hf_connector      import HFConnector
-from agent.agent       import Agent          # NEW
+from agent.agent       import Agent          
 
 logging.basicConfig(
     level   = logging.INFO,
@@ -133,7 +130,6 @@ async def lifespan(app: FastAPI):
     )
     logger.info(f"AgentMemory ready  ({state.memory.count()} entries)")
 
-    # Agent shares all singletons -- no double-loading of any model
     state.agent = Agent(
         classifier = state.classifier,
         router     = state.router,
@@ -162,13 +158,9 @@ app = FastAPI(
     lifespan    = lifespan,
 )
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Allows any frontend to connect
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -193,18 +185,16 @@ async def log_requests(request: Request, call_next):
 
 @app.get("/")
 async def serve_frontend():
-    """Serves the UI directly from the backend"""
-    # Look for index.html in the parent directory of api/
+    """Serves the UI directly from the backend via FileResponse"""
     ui_path = Path(__file__).resolve().parent.parent / "index.html"
     
     if not ui_path.exists():
         return HTMLResponse(
-            content="<h1>Frontend not found!</h1><p>Please place index.html in the root directory.</p>", 
+            content="<h1>Frontend not found!</h1><p>Ensure index.html is in the container root.</p>", 
             status_code=404
         )
         
-    with open(ui_path, "r", encoding="utf-8") as f:
-        return HTMLResponse(content=f.read(), status_code=200)
+    return FileResponse(ui_path)
 
 
 @app.post("/complete", response_model=CompletionResponse)
@@ -220,7 +210,6 @@ async def complete(req: CompletionRequest):
     """
     session_id = req.session_id or str(uuid.uuid4())
 
-    # Classify upfront so complexity_score is available for the response
     clf = state.classifier.classify(req.prompt)
     logger.info(
         f"[{session_id[:12]}] score={clf.final_score:.3f} "
