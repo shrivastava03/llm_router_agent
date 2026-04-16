@@ -184,6 +184,7 @@ async def log_requests(request: Request, call_next):
 # ─────────────────────────────────────────────────────────────────
 
 @app.get("/")
+@app.head("/")
 async def serve_frontend():
     """Serves the UI directly from the backend via FileResponse"""
     ui_path = Path(__file__).resolve().parent.parent / "index.html"
@@ -195,7 +196,6 @@ async def serve_frontend():
         )
         
     return FileResponse(ui_path)
-
 
 @app.post("/complete", response_model=CompletionResponse)
 async def complete(req: CompletionRequest):
