@@ -7,12 +7,6 @@ Gives the agent persistent short-term + long-term memory.
 Every completed session is stored as a vector. On each new
 request, the top-K most similar past interactions are retrieved
 and injected into the prompt as context.
-
-Install:
-  pip install chromadb
-
-ChromaDB runs fully local — no external service needed.
-Data persists to .chromadb/ directory between restarts.
 """
 
 from __future__ import annotations
@@ -36,11 +30,6 @@ except ImportError:
         "Run: pip install chromadb"
     )
 
-
-# ─────────────────────────────────────────────────────────────────
-# MemoryEntry — what gets stored
-# ─────────────────────────────────────────────────────────────────
-
 @dataclass
 class MemoryEntry:
     id:          str
@@ -63,11 +52,6 @@ class MemoryEntry:
             "timestamp":  self.timestamp,
         }
 
-
-# ─────────────────────────────────────────────────────────────────
-# MemoryResult — what gets retrieved
-# ─────────────────────────────────────────────────────────────────
-
 @dataclass
 class MemoryResult:
     prompt:     str
@@ -81,26 +65,7 @@ class MemoryResult:
         return f"[Past interaction — similarity {self.similarity:.2f}]\nQ: {self.prompt}\nA: {self.response}"
 
 
-# ─────────────────────────────────────────────────────────────────
-# AgentMemory — main class
-# ─────────────────────────────────────────────────────────────────
-
 class AgentMemory:
-    """
-    Persistent vector memory backed by ChromaDB.
-
-    Usage:
-        memory = AgentMemory()
-
-        # After a completed LLM call:
-        memory.store(prompt, response, session_id, tier_used, tokens)
-
-        # Before a new LLM call — inject past context:
-        past = memory.retrieve(new_prompt, top_k=3)
-        context = memory.build_context_string(past)
-        full_prompt = context + "\\n\\n" + new_prompt
-    """
-
     def __init__(self, persist_dir: str = ".chromadb", collection: str = "agent_memory"):
         self._ready = False
         if not _CHROMA_AVAILABLE:
@@ -131,10 +96,7 @@ class AgentMemory:
         tier_used:  str  = "unknown",
         tokens:     int  = 0,
     ) -> Optional[str]:
-        """
-        Persist a completed interaction to memory.
-        Returns the entry ID, or None if memory is unavailable.
-        """
+        """Standard fire-and-forget database write."""
         if not self._ready:
             return None
 
@@ -160,6 +122,70 @@ class AgentMemory:
             logger.error(f"[Memory] Store failed: {e}")
             return None
 
+    async def store_with_transaction(
+        self,
+        prompt: str,
+        response: str,
+        session_id: str,
+        tier_used: str = "unknown",
+        tokens: int = 0,
+    ) -> Optional[str]:
+        """
+        Store with transaction semantics: all-or-nothing.
+        Verifies that the entry was actually written before returning.
+        """
+        if not self._ready:
+            logger.warning("[Memory] ChromaDB not ready — cannot store")
+            return None
+
+        entry = MemoryEntry(
+            id=str(uuid.uuid4()),
+            prompt=prompt,
+            response=response,
+            session_id=session_id,
+            tier_used=tier_used,
+            tokens=tokens,
+            timestamp=time.time(),
+        )
+
+        try:
+            # Step 1: Write to ChromaDB
+            logger.debug(f"[Memory] Writing {entry.id[:12]}…")
+            self._col.add(
+                ids=[entry.id],
+                documents=[entry.to_document()],
+                metadatas=[entry.to_metadata()],
+            )
+
+            # Step 2: Verify write succeeded (critical!)
+            logger.debug(f"[Memory] Verifying {entry.id[:12]}…")
+            verification = self._col.get(ids=[entry.id])
+            
+            if not verification["documents"] or len(verification["documents"]) == 0:
+                raise RuntimeError(
+                    f"Verification failed: entry {entry.id[:12]}… not found after write"
+                )
+            
+            # Step 3: Validate retrieved entry matches what we wrote
+            stored_doc = verification["documents"][0]
+            expected_doc = entry.to_document()
+            
+            if stored_doc != expected_doc:
+                raise RuntimeError(
+                    f"Verification failed: stored document doesn't match\n"
+                    f"  Expected: {expected_doc[:100]}\n"
+                    f"  Stored: {stored_doc[:100]}"
+                )
+            
+            logger.info(f"[Memory] ✓ Transactional store VERIFIED: {entry.id[:12]}…")
+            return entry.id
+
+        except Exception as e:
+            logger.error(
+                f"[Memory] ✗ Transactional store FAILED for {entry.id[:12]}…: {e}"
+            )
+            return None
+
     # ── Retrieve ───────────────────────────────────────────────────
 
     def retrieve(
@@ -168,18 +194,6 @@ class AgentMemory:
         top_k:           int   = 5,
         score_threshold: float = 0.75,
     ) -> list[MemoryResult]:
-        """
-        Find the most similar past interactions to `query`.
-
-        Parameters
-        ----------
-        query           : The current user prompt
-        top_k           : Max number of results to return
-        score_threshold : Only return results with distance ≤ threshold
-                          (lower = more similar in L2 space)
-
-        Returns a list of MemoryResult sorted by relevance (closest first).
-        """
         if not self._ready or self._col.count() == 0:
             return []
 
@@ -198,7 +212,6 @@ class AgentMemory:
                 if dist > score_threshold:
                     continue   # too dissimilar — skip
 
-                # Parse stored document back into prompt / response
                 parts    = doc.split("\nA: ", 1)
                 prompt_t = parts[0].replace("Q: ", "", 1) if parts else doc
                 resp_t   = parts[1] if len(parts) > 1 else ""
@@ -222,10 +235,6 @@ class AgentMemory:
 
     @staticmethod
     def build_context_string(results: list[MemoryResult]) -> str:
-        """
-        Formats retrieved memories into a context block for prompt injection.
-        Returns empty string if no results.
-        """
         if not results:
             return ""
         blocks = [r.as_context_block() for r in results]
@@ -235,13 +244,11 @@ class AgentMemory:
     # ── Stats ──────────────────────────────────────────────────────
 
     def count(self) -> int:
-        """Total entries stored in memory."""
-        if not self._ready:
+        if not hasattr(self, '_col') or self._col is None:
             return 0
         return self._col.count()
 
     def clear(self) -> None:
-        """Wipe all stored memories. Use with care."""
         if not self._ready:
             return
         ids = self._col.get()["ids"]

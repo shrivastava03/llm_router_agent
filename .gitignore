@@ -13,6 +13,7 @@ __pycache__/
 
 # Agent databases and memory
 .chromadb/
+chroma_data/
 budget_audit.db
 
 # OS generated files

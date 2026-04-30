@@ -1,89 +1,55 @@
-# ============================================================================
-# Stage 1: Builder (compile heavy deps)
-# ============================================================================
-FROM python:3.11-slim as builder
+# --- Builder Stage ---
+FROM python:3.11-slim AS builder
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
 WORKDIR /build
 
-# Install system build tools AND libgomp1 so ONNX verification doesn't fail
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        build-essential \
-        gcc \
-        g++ \
-        git \
-        libgomp1 \
-    && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
+# Install build tools once for all C-based libraries
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade --no-cache-dir pip setuptools wheel
+# 1. Force the correct NumPy version to prevent the "np.float_" crash
+RUN pip install --no-cache-dir numpy==1.26.4
 
+# 2. Install ALL necessary dependencies for your LLM Router
 RUN pip install --no-cache-dir \
-    torch torchvision torchaudio \
-    --index-url https://download.pytorch.org/whl/cpu
+    fastapi>=0.111.0 \
+    uvicorn[standard]>=0.29.0 \
+    pydantic>=2.7.0 \
+    python-dotenv>=1.0.0 \
+    httpx>=0.27.0 \
+    tiktoken>=0.7.0 \
+    aiosqlite>=0.20.0 \
+    tavily-python>=0.3.3 \
+    groq>=0.4.0 \
+    fastembed>=0.3.0 \
+    onnxruntime>=1.18.0 \
+    chromadb==0.5.3 \
+    pandas>=2.2.0 \
+    tabulate>=0.9.0 \
+    pymupdf>=1.24.0
 
-RUN pip install --no-cache-dir \
-    "numpy<2.0.0" \
-    sentence-transformers>=2.7.0 \
-    chromadb==0.5.0 \
-    onnxruntime
-
-COPY requirements.txt .
-
-RUN pip install --no-cache-dir \
-    --default-timeout=1000 \
-    -r requirements.txt
-
-# Verify critical imports one by one so we get exact error tracebacks
-RUN python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
-RUN python -c "import sentence_transformers; print(f'Sentence Transformers OK')"
-RUN python -c "import chromadb; print(f'ChromaDB version: {chromadb.__version__}')"
-RUN python -c "import onnxruntime; print(f'ONNX Runtime OK')"
-# ============================================================================
-# Stage 2: Runtime (slim, only what's needed)
-# ============================================================================
+# --- Final Stage ---
 FROM python:3.11-slim
 
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV SENTENCE_TRANSFORMERS_HOME=/app/.cache/sentence-transformers
-ENV HF_HOME=/app/.cache/huggingface
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
+    HF_HOME=/app/.cache/huggingface
 
 WORKDIR /app
 
-# 🔥 HOTFIX 1: Add libgomp1 to the runtime stage so ONNX doesn't crash!
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        curl \
-        libgomp1 \
-    && rm -rf /var/lib/apt/lists/* /var/cache/apt/*
-
-# Copy pip packages from builder stage
+# Copy everything from builder to ensure no modules are missing
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Cache directories setup
-RUN mkdir -p /app/.cache/sentence-transformers \
-    && mkdir -p /app/.cache/huggingface \
-    && chmod -R 777 /app/.cache
-
-# 🔥 HOTFIX 2: Pre-download both models INTO the newly created cache folders
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')" && \
-    python -c "from chromadb.utils import embedding_functions; embedding_functions.DefaultEmbeddingFunction()(['test'])"
-
-# Copy app code LAST
+# Copy your source code
 COPY . .
 
-# Verify app structure exists
-RUN test -f api/main.py || (echo "ERROR: api/main.py not found" && exit 1) && \
-    test -f requirements.txt || (echo "ERROR: requirements.txt not found" && exit 1)
+# Final cleanup to keep the size as low as possible
+RUN find /usr/local/lib/python3.11/site-packages -name "*.pyc" -delete && \
+    find /usr/local/lib/python3.11/site-packages -name "__pycache__" -delete
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-10000}/health || exit 1
+EXPOSE 8000
 
-EXPOSE 10000
-
-CMD ["sh", "-c", "exec uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
